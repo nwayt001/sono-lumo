@@ -1,106 +1,165 @@
 from __future__ import print_function
 
-import sys
+import sys, os
 import time
 import alsaaudio
 import struct
 import numpy as np
 import numpy as numpy
-from Adafruit_PWM_Servo_Driver import PWM
+if (os.uname())[1] == 'raspberrypi':
+    from Adafruit_PWM_Servo_Driver import PWM
 import matplotlib.pyplot as plt
 
-# Parameters for USB mic Sound Processing
-USB_Name = 'hw:CARD=C920' #change name to final USB mic
-SamplingRate = 44100
-Channels = 1
-chunk = 2000
-nfft = 2*chunk
-freqs = np.linspace(0.0,1.0/(2.0*(1.0/SamplingRate)),nfft/2.0)
-time_resol = (nfft*(1.0) / SamplingRate*(1.0)) *1000.0
-windowF = np.hamming(nfft)
-cmap = 'rainbow'
-colors = plt.get_cmap(cmap)
 
-# Parms for RasPi Hat
-Ch_r1 = 1
-Ch_b1 = 2
-Ch_g1 = 3
-Ch_r2 = 5
-Ch_b2 = 6
-Ch_g2 = 7
-Ch_r3 = 9
-Ch_b3 = 10
-Ch_g3 = 11
-Ch_r4 = 13
-Ch_b4 = 14
-Ch_g4 = 15
-pulse_width = 0.5
-num_tics = 4096.0
-
-ring1_color=colors(0)
-ring2_color=colors(0)
-ring3_color=colors(0)
-ring3_color=colors(0)
-
-# Initialize the RasPi Hat (for Raspi only)
-pwm = PWM(0x40)
-pwm.setPWMFreq(1000) # set to max frequency
-
-
-# Open the device in nonblocking capture mode. 
-inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, USB_Name)
-
-# Set attributes for recording:
-inp.setchannels(Channels)
-inp.setrate(SamplingRate)
-inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-inp.setperiodsize(chunk)
-
-
-def setColorChain():
-    tmp = ring1_color[0]*num_tics
-    pwm.setPWM(Ch_r1,0, (ring1_color[0]*num_tics).astype(int))
-    pwm.setPWM(Ch_g1,0, (ring1_color[1]*num_tics).astype(int))
-    pwm.setPWM(Ch_b1,0, (ring1_color[2]*num_tics).astype(int))
+# Main Class
+class SonoLumo(object):
+    """
+    Main Sonnolumo Raspberry Pi Class:
     
-    pwm.setPWM(Ch_r2,0, (ring2_color[0]*num_tics).astype(int))
-    pwm.setPWM(Ch_g2,0, (ring2_color[1]*num_tics).astype(int))
-    pwm.setPWM(Ch_b2,0, (ring2_color[2]*num_tics).astype(int))
+    This class sets up an audio stream from a usb microphone, 
+    calculates a frequency spectrum and encodes maximum frequency 
+    to color for pwm controlled LED strips
+    """
+    def __init__(self,use_sim):
+        # Attributes for USB mic & Signal Processing
+        self.use_sim = use_sim
+        self.is_raspi = (os.uname())[1] == 'raspberrypi'
+        self.USB_Name = 'hw:CARD=C920' #change name to final USB mic
+        self.SamplingRate = 8000
+        self.Channels = 1
+        self.chunk = 2000
+        self.nfft = 2*self.chunk
+        self.freqs = np.linspace(0.0,1.0/(2.0*(1.0/self.SamplingRate)),self.nfft/2.0)
+        self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
+        self.windowF = np.hamming(self.nfft)
+        self.cmap = 'rainbow'
+        self.colors = plt.get_cmap(self.cmap)
+        self.maxFreq = 0.0;
     
-    pwm.setPWM(Ch_r3,0, (ring3_color[0]*num_tics).astype(int))
-    pwm.setPWM(Ch_g3,0, (ring3_color[1]*num_tics).astype(int))
-    pwm.setPWM(Ch_b3,0, (ring3_color[2]*num_tics).astype(int))
-    
-    pwm.setPWM(Ch_r4,0, (ring4_color[0]*num_tics).astype(int))
-    pwm.setPWM(Ch_g4,0, (ring4_color[1]*num_tics).astype(int))
-    pwm.setPWM(Ch_b4,0, (ring4_color[2]*num_tics).astype(int))
-
-    
-# read from device
-while 1:
-    l, data = inp.read()
-    
-    if l>0:
-        fmt = "%dH"%(len(data)/2)
-        data2 = struct.unpack(fmt, data)
-        data2 = np.array(data2, dtype='h')
-        data2 = windowF*data2        
-        # Apply FFT
-        yf = np.fft.rfft(data2)
-        yf = 2.0/nfft * np.abs(yf[:nfft//2])
+        # Attributes for RasPi Hat
+        self.Ch_r1 = 1
+        self.Ch_b1 = 2
+        self.Ch_g1 = 3
+        self.Ch_r2 = 5
+        self.Ch_b2 = 6
+        self.Ch_g2 = 7
+        self.Ch_r3 = 9
+        self.Ch_b3 = 10
+        self.Ch_g3 = 11
+        self.Ch_r4 = 13
+        self.Ch_b4 = 14
+        self.Ch_g4 = 15
+        self.pulse_width = 0.5
+        self.num_tics = 4096.0
         
-        # Find Max Freq
-        maxFreq = freqs[np.argmax(yf)]
+        self.ring1_color=self.colors(0)
+        self.ring2_color=self.colors(0)
+        self.ring3_color=self.colors(0)
+        self.ring4_color=self.colors(0)
+    
+        # If we're not using raspi, or we want to run simulator
+        if(not self.is_raspi or self.use_sim):
+            self.initialize_Simulator()
+            
+        # Initialize the RasPi Hat (for Raspi only)
+        if(self.is_raspi):
+            self.pwm = PWM(0x40)
+            self.pwm.setPWMFreq(1000) # set to max frequency
         
-        # Convert Frequency to Color
-        rgba = colors(maxFreq/freqs[freqs.size-1])
+        # Open the device in nonblocking capture mode.
+        self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
         
-        # Set colors for LED array
-        ring4_color = ring3_color
-        ring3_color = ring2_color
-        ring2_color = ring1_color
-        ring1_color = rgba
-        setColorChain()
+        # Set attributes for recording:
+        self.inp.setchannels(self.Channels)
+        self.inp.setrate(self.SamplingRate)
+        self.inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
+        self.inp.setperiodsize(self.chunk)
         
-        # short pause (use this to control timing for now)
-        time.sleep(0.2)
+        
+    def __del__(self):
+        try:
+            self.inp.close()
+        except ValueError:
+            print('error when closing audio stream')
+
+    def initialize_Simulator(self):
+        self.cax = plt.imshow(np.random.rand(50,50),cmap=self.cmap) #<-to get a colorbar
+        self.fig, (self.ax) = plt.subplots()
+        
+        self.ring0_sim = 0.03 # ring radius for the simulated flower
+        self.ring1_sim = 0.1
+        self.ring2_sim = 0.2
+        self.ring3_sim = 0.3
+        self.ring4_sim = 0.4
+
+        self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring4_sim, color='black'))
+        self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring3_sim, color='gray'))
+        self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring2_sim, color='black'))
+        self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring1_sim, color='gray'))
+        self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
+        
+        self.cbar = self.fig.colorbar(self.cax, ticks=[-1, 0, 1])
+        
+    def setLEDcolors(self):
+        if(self.is_raspi and not self.use_sim): #use real flower
+            self.pwm.setPWM(self.Ch_r1,0, (self.ring1_color[0]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g1,0, (self.ring1_color[1]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b1,0, (self.ring1_color[2]*self.num_tics).astype(int))
+            
+            self.pwm.setPWM(self.Ch_r2,0, (self.ring2_color[0]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g2,0, (self.ring2_color[1]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b2,0, (self.ring2_color[2]*self.num_tics).astype(int))
+            
+            self.pwm.setPWM(self.Ch_r3,0, (self.ring3_color[0]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g3,0, (self.ring3_color[1]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b3,0, (self.ring3_color[2]*self.num_tics).astype(int))
+            
+            self.pwm.setPWM(self.Ch_r4,0, (self.ring4_color[0]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g4,0, (self.ring4_color[1]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b4,0, (self.ring4_color[2]*self.num_tics).astype(int))
+        else: #use simulated flower (for testing and debugging)
+            self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring4_sim, color=self.ring4_color))
+            self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring3_sim, color=self.ring3_color))
+            self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring2_sim, color=self.ring2_color))
+            self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring1_sim, color=self.ring1_color))
+            self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
+            plt.pause(0.1)
+            print("%0.2f" % self.maxFreq + ' Hz') #show detected frequency for debugging
+            
+    def run(self):
+        # read from device
+        while 1:
+            l, data = self.inp.read()
+            
+            if l>0:
+                fmt = "%dH"%(len(data)/2)
+                data2 = struct.unpack(fmt, data)
+                data2 = np.array(data2, dtype='h')
+                data2 = self.windowF*data2        
+                # Apply FFT
+                yf = np.fft.rfft(data2)
+                yf = 2.0/self.nfft * np.abs(yf[:self.nfft//2])
+                
+                # Find Max Freq
+                self.maxFreq = self.freqs[np.argmax(yf)]
+                                
+                # Convert Frequency to Color
+                rgba = self.colors(self.maxFreq/self.freqs[self.freqs.size-1])
+                                
+                # Set colors for LED array
+                self.ring4_color = self.ring3_color
+                self.ring3_color = self.ring2_color
+                self.ring2_color = self.ring1_color
+                self.ring1_color = rgba
+                                
+                self.setLEDcolors() # update pwm color values for LED strips
+        
+                # short pause (use this to control timing for the color propogation...for now)
+                time.sleep(0.1)
+
+if __name__ == '__main__':
+    use_sim = True # True -> run simulator, False -> run Flower LED's
+    sonolumo = SonoLumo(use_sim)
+    sonolumo.run()
+
+    
