@@ -1,4 +1,4 @@
-# sono-lumo
+# Sono-Lumo
 
 ## Intro
 
