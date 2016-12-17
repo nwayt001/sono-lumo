@@ -25,10 +25,10 @@ class SonoLumo(object):
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
         self.USB_Name = 'hw:CARD=C920' #change name to final USB mic
-        self.SamplingRate = 8000
+        self.SamplingRate = 16000
         self.Channels = 1
-        self.chunk = 2000
-        self.nfft = 2*self.chunk
+        self.chunk = 1000
+        self.nfft = self.chunk
         self.freqs = np.linspace(0.0,1.0/(2.0*(1.0/self.SamplingRate)),self.nfft/2.0)
         self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
         self.windowF = np.hamming(self.nfft)
