@@ -32,8 +32,8 @@ class SonoLumo(object):
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 4000
-		self.threshold = 900.0
+        self.maxDetectFreq = 4000.0
+        self.threshold = 900.0
         # Open the device in nonblocking capture mode.
         self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
 
@@ -71,6 +71,19 @@ class SonoLumo(object):
         self.ring3_color=self.colors(0)
         self.ring4_color=self.colors(0)
     
+        
+        # parameters for tuning rgb generalized bellshaped membership functions
+        self.useGBMF = True
+        self.blue_a=0.2
+        self.blue_b=0.2
+        self.blue_c=0.5
+        self.green_a=0.2
+        self.green_b=0.2
+        self.green_c=0.6
+        self.red_a=0.2
+        self.red_b=0.2
+        self.red_c=0.3
+        
         # If we're not using raspi, or we want to run simulator
         if(not self.is_raspi or self.use_sim):
             self.initialize_Simulator()
@@ -132,7 +145,22 @@ class SonoLumo(object):
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
             plt.pause(0.1)
             print("%0.2f" % self.maxFreq + ' Hz') #show detected frequency for debugging
-            
+    
+    def getROYGBIV(self,x):
+        r_val = 1/(1+np.power(np.abs((x-self.red_c)/self.red_a),2*self.red_b))
+        g_val = 1/(1+np.power(np.abs((x-self.green_c)/self.green_a),2*self.green_b))
+        b_val = 1/(1+np.power(np.abs((x-self.blue_c)/self.blue_a),2*self.blue_b))
+        
+        lst = list()
+        lst.append(np.float64(r_val))
+        lst.append(np.float64(g_val))
+        lst.append(np.float64(b_val))
+        lst.append(np.float64(1.0))
+        rgba = tuple(lst)
+        
+        return rgba
+        
+        
     def run(self):
         # read from device
         while 1:
@@ -149,11 +177,15 @@ class SonoLumo(object):
 
                 # Find Max Freq
                 self.maxFreq = self.freqs[np.argmax(yf)]
+                                          
+                if(self.useGBMF):
+                    # Convert Frequency to color using gerneralized bellshaped membership function
+                    rgba = self.getROYGBIV(self.maxFreq/self.maxDetectFreq)
+                else:
+                    # Convert Frequency to Color using pyplot colormaps
+                    rgba = self.colors(self.maxFreq/self.maxDetectFreq)
                 
-                # Convert Frequency to Color
-                rgba = self.colors(self.maxFreq/self.maxDetectFreq)
-                
-                if(np.max(yf)<self.threshold):
+                if(np.max(yf)<self.threshold or self.maxFreq/self.maxDetectFreq >=1.0):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
                     lst[1] = np.float64(0.99)
