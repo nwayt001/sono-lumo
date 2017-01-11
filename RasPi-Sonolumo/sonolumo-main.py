@@ -33,7 +33,7 @@ class SonoLumo(object):
         self.chunk = 2000
         self.nfft = self.chunk
         self.maxDetectFreq = 4000
-		self.threshold = 900.0
+	self.threshold = 900.0
         # Open the device in nonblocking capture mode.
         self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
 
