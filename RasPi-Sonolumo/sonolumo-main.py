@@ -179,16 +179,21 @@ class SonoLumo(object):
                 yf = 2.0/self.nfft * np.abs(yf[:self.nfft//2])
 
                 # Find Max Freq
-                self.maxFreq = self.freqs[np.argmax(yf)]
-                if(self.maxFreq<self.minDetectFreq):
-                    self.maxFreq = self.minDetectFreq
-                    
-                colorval = self.maxFreq/self.maxDetectFreq
+                self.detectedFreqFreq = self.freqs[np.argmax(yf)]
+                
+				# Bound frequency by minimum detectable frequency
+				if(self.detectedFreq<self.minDetectFreq):
+                    self.detectedFreq = self.minDetectFreq
+                
+				# Convert frequency to 0-1 scale
+                colorval = self.detectedFreq/self.maxDetectFreq
                 colorval = (colorval - self.minDetectFreq/self.maxDetectFreq) / (1- self.minDetectFreq/self.maxDetectFreq)
                 
+				# Bound frequency to maximum detectable frequency
                 if(colorval>0.99):
                     colorval=0.99
-                    
+                
+				# Convert frequency to color
                 if(self.useGBMF):
                     # Convert Frequency to color using gerneralized bellshaped membership function
                     rgba = self.getROYGBIV(colorval)
@@ -196,6 +201,7 @@ class SonoLumo(object):
                     # Convert Frequency to Color using pyplot colormaps
                     rgba = self.colors(colorval)
                 
+				# Set to white if power is below threashold
                 if(np.max(yf)<self.threshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
