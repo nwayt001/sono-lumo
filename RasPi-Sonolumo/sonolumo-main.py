@@ -32,8 +32,9 @@ class SonoLumo(object):
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 4000.0
-        self.threshold = 900.0
+        self.maxDetectFreq = 1000.0
+        self.minDetectFreq = 300.0
+        self.threshold = 200.0
 
         # Open the device in nonblocking capture mode.
         self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
@@ -49,7 +50,7 @@ class SonoLumo(object):
         self.windowF = np.hamming(self.nfft)
         self.cmap = 'rainbow'
         self.colors = plt.get_cmap(self.cmap)
-        self.maxFreq = 0.0;
+        self.detectedFreq = 0.0;
     
         # Attributes for RasPi Hat
         self.Ch_r1 = 0
@@ -72,18 +73,17 @@ class SonoLumo(object):
         self.ring3_color=self.colors(0)
         self.ring4_color=self.colors(0)
     
-        
         # parameters for tuning rgb generalized bellshaped membership functions
         self.useGBMF = True
-        self.blue_a=0.2
-        self.blue_b=0.2
-        self.blue_c=0.5
-        self.green_a=0.2
-        self.green_b=0.2
-        self.green_c=0.6
-        self.red_a=0.2
-        self.red_b=0.2
-        self.red_c=0.3
+        self.blue_a=3.0
+        self.blue_b=3.0
+        self.blue_c=9.0
+        self.green_a=3.0
+        self.green_b=3.0
+        self.green_c=5.0
+        self.red_a=3.0
+        self.red_b=-3.0
+        self.red_c=7.0
         
         # If we're not using raspi, or we want to run simulator
         if(not self.is_raspi or self.use_sim):
@@ -148,6 +148,8 @@ class SonoLumo(object):
             print("%0.2f" % self.maxFreq + ' Hz') #show detected frequency for debugging
     
     def getROYGBIV(self,x):
+        # convert 0-1 value to 0-12 (because the GBMF constants are based on that scale)
+        x = x*12
         r_val = 1/(1+np.power(np.abs((x-self.red_c)/self.red_a),2*self.red_b))
         g_val = 1/(1+np.power(np.abs((x-self.green_c)/self.green_a),2*self.green_b))
         b_val = 1/(1+np.power(np.abs((x-self.blue_c)/self.blue_a),2*self.blue_b))
@@ -178,15 +180,23 @@ class SonoLumo(object):
 
                 # Find Max Freq
                 self.maxFreq = self.freqs[np.argmax(yf)]
-                                          
+                if(self.maxFreq<self.minDetectFreq):
+                    self.maxFreq = self.minDetectFreq
+                    
+                colorval = self.maxFreq/self.maxDetectFreq
+                colorval = (colorval - 0.3) / (1- 0.3)
+                
+                if(colorval>0.99):
+                    colorval=0.99
+                    
                 if(self.useGBMF):
                     # Convert Frequency to color using gerneralized bellshaped membership function
-                    rgba = self.getROYGBIV(self.maxFreq/self.maxDetectFreq)
+                    rgba = self.getROYGBIV(colorval)
                 else:
                     # Convert Frequency to Color using pyplot colormaps
-                    rgba = self.colors(self.maxFreq/self.maxDetectFreq)
+                    rgba = self.colors(colorval)
                 
-                if(np.max(yf)<self.threshold or self.maxFreq/self.maxDetectFreq >=1.0):
+                if(np.max(yf)<self.threshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
                     lst[1] = np.float64(0.99)
