@@ -184,7 +184,7 @@ class SonoLumo(object):
                     self.maxFreq = self.minDetectFreq
                     
                 colorval = self.maxFreq/self.maxDetectFreq
-                colorval = (colorval - 0.3) / (1- 0.3)
+                colorval = (colorval - self.minDetectFreq/self.maxDetectFreq) / (1- self.minDetectFreq/self.maxDetectFreq)
                 
                 if(colorval>0.99):
                     colorval=0.99
