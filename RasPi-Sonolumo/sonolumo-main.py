@@ -27,7 +27,7 @@ class SonoLumo(object):
         # Attributes for USB mic & Signal Processing
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
-        self.USB_Name = 'hw:CARD=Device' #change name to final USB mic
+        self.USB_Name = 'hw:CARD=I82801AAICH,DEV=1' #change name to final USB mic
         self.SamplingRate = 16000
         self.Channels = 1
         self.chunk = 2000
@@ -137,7 +137,7 @@ class SonoLumo(object):
             self.pwm.setPWM(self.Ch_r4,0, (self.ring4_color[0]*self.num_tics).astype(int))
             self.pwm.setPWM(self.Ch_g4,0, (self.ring4_color[1]*self.num_tics).astype(int))
             self.pwm.setPWM(self.Ch_b4,0, (self.ring4_color[2]*self.num_tics).astype(int))
-			
+            
         else: #use simulated flower (for testing and debugging)
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring4_sim, color=self.ring4_color))
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring3_sim, color=self.ring3_color))
@@ -181,19 +181,19 @@ class SonoLumo(object):
                 # Find Max Freq
                 self.detectedFreqFreq = self.freqs[np.argmax(yf)]
                 
-				# Bound frequency by minimum detectable frequency
-				if(self.detectedFreq<self.minDetectFreq):
+                # Bound frequency by minimum detectable frequency
+                if(self.detectedFreq<self.minDetectFreq):
                     self.detectedFreq = self.minDetectFreq
                 
-				# Convert frequency to 0-1 scale
+                # Convert frequency to 0-1 scale
                 colorval = self.detectedFreq/self.maxDetectFreq
                 colorval = (colorval - self.minDetectFreq/self.maxDetectFreq) / (1- self.minDetectFreq/self.maxDetectFreq)
                 
-				# Bound frequency to maximum detectable frequency
+                # Bound frequency to maximum detectable frequency
                 if(colorval>0.99):
                     colorval=0.99
                 
-				# Convert frequency to color
+                # Convert frequency to color
                 if(self.useGBMF):
                     # Convert Frequency to color using gerneralized bellshaped membership function
                     rgba = self.getROYGBIV(colorval)
@@ -201,7 +201,7 @@ class SonoLumo(object):
                     # Convert Frequency to Color using pyplot colormaps
                     rgba = self.colors(colorval)
                 
-				# Set to white if power is below threashold
+                # Set to white if power is below threashold
                 if(np.max(yf)<self.threshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
