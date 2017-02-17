@@ -28,7 +28,7 @@ class SonoLumo(object):
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
         self.USB_Name = 'hw:1,0' #change name to final USB mic
-        self.SamplingRate = 16000
+        self.SamplingRate = 44100
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
