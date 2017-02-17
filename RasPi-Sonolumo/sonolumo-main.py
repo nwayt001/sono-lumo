@@ -145,7 +145,6 @@ class SonoLumo(object):
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring1_sim, color=self.ring1_color))
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
             plt.pause(0.1)
-            print("%0.2f" % self.maxDetectFreq + ' Hz') #show detected frequency for debugging
     
     def getROYGBIV(self,x):
         # convert 0-1 value to 0-12 (because the GBMF constants are based on that scale)
@@ -179,7 +178,7 @@ class SonoLumo(object):
                 yf = 2.0/self.nfft * np.abs(yf[:self.nfft//2])
 
                 # Find Max Freq
-                self.detectedFreqFreq = self.freqs[np.argmax(yf)]
+                self.detectedFreq = self.freqs[np.argmax(yf)]
                 
                 # Bound frequency by minimum detectable frequency
                 if(self.detectedFreq<self.minDetectFreq):
@@ -216,6 +215,8 @@ class SonoLumo(object):
                 self.ring2_color = self.ring1_color
                 self.ring1_color = rgba
                                 
+                print("%0.2f" % self.maxDetectFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf)) #show detected frequency for debugging
+
                 self.setLEDcolors() # update pwm color values for LED strips
         
                 # short pause (use this to control timing for the color propogation...for now)
