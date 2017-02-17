@@ -27,7 +27,7 @@ class SonoLumo(object):
         # Attributes for USB mic & Signal Processing
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
-        self.USB_Name = 'hw:CARD=I82801AAICH,DEV=1' #change name to final USB mic
+        self.USB_Name = 'hw:1,0' #change name to final USB mic
         self.SamplingRate = 16000
         self.Channels = 1
         self.chunk = 2000
@@ -145,7 +145,7 @@ class SonoLumo(object):
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring1_sim, color=self.ring1_color))
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
             plt.pause(0.1)
-            print("%0.2f" % self.maxFreq + ' Hz') #show detected frequency for debugging
+            print("%0.2f" % self.maxDetectFreq + ' Hz') #show detected frequency for debugging
     
     def getROYGBIV(self,x):
         # convert 0-1 value to 0-12 (because the GBMF constants are based on that scale)
