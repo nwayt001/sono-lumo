@@ -32,7 +32,7 @@ class SonoLumo(object):
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 1000.0
+        self.maxDetectFreq = 8000.0
         self.minDetectFreq = 300.0
         self.threshold = 200.0
 
@@ -46,6 +46,8 @@ class SonoLumo(object):
         self.inp.setperiodsize(self.chunk)
         
         self.freqs = np.linspace(0.0,1.0/(2.0*(1.0/self.SamplingRate)),self.nfft/2.0)
+        self.freqmask = (self.freqs>self.minDetectFreq) & (self.freqs<self.maxDetectFreq)
+        print(self.freqmask)
         self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
         self.windowF = np.hamming(self.nfft)
         self.cmap = 'rainbow'
@@ -164,8 +166,12 @@ class SonoLumo(object):
         
         
     def run(self):
+
+        print(self.freqs)
+
         # read from device
         while 1:
+            print()
             l, data = self.inp.read()
             
             if l>0:
@@ -178,19 +184,22 @@ class SonoLumo(object):
                 yf = 2.0/self.nfft * np.abs(yf[:self.nfft//2])
 
                 # Find Max Freq
-                self.detectedFreq = self.freqs[np.argmax(yf)]
+                self.detectedFreq = self.freqs[np.argmax(yf*self.freqmask)]
                 
-                # Bound frequency by minimum detectable frequency
-                if(self.detectedFreq<self.minDetectFreq):
-                    self.detectedFreq = self.minDetectFreq
+                ## Bound frequency by minimum detectable frequency
+                #if(self.detectedFreq<self.minDetectFreq):
+                #    self.detectedFreq = self.minDetectFreq
                 
                 # Convert frequency to 0-1 scale
-                colorval = self.detectedFreq/self.maxDetectFreq
-                colorval = (colorval - self.minDetectFreq/self.maxDetectFreq) / (1- self.minDetectFreq/self.maxDetectFreq)
+                #colorval = ((self.detectedFreq/self.maxDetectFreq) - (self.minDetectFreq/self.maxDetectFreq)) / (1- self.minDetectFreq/self.maxDetectFreq)
+                colorval = (self.detectedFreq - self.minDetectFreq) / self.maxDetectFreq
+                print("Colorval %0.2f" % colorval)
                 
-                # Bound frequency to maximum detectable frequency
+                # Bound frequency to maximum+minimum detectable frequency range
                 if(colorval>0.99):
                     colorval=0.99
+                if(colorval<0.0):
+                    colorval=0.0
                 
                 # Convert frequency to color
                 if(self.useGBMF):
@@ -208,6 +217,8 @@ class SonoLumo(object):
                     lst[2] = np.float64(0.99)
                     lst[3] = np.float64(1.0)
                     rgba = tuple(lst)
+                else:
+                    print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
                 
                 # Set colors for LED array
                 self.ring4_color = self.ring3_color
@@ -215,7 +226,7 @@ class SonoLumo(object):
                 self.ring2_color = self.ring1_color
                 self.ring1_color = rgba
                                 
-                print("%0.2f" % self.maxDetectFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf)) #show detected frequency for debugging
+                print("%0.2f" % self.detectedFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf) + ", arraynum=%d" % np.argmax(yf*self.freqmask)) #show detected frequency for debugging
 
                 self.setLEDcolors() # update pwm color values for LED strips
         
