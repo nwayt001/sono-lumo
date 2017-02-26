@@ -32,9 +32,10 @@ class SonoLumo(object):
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 1000.0
+        self.maxDetectFreq = 2000.0
         self.minDetectFreq = 300.0
-        self.threshold = 200.0
+        self.maxThreshold = 1000.0
+        self.minThreshold = 200.0
 
         # mel scale range
         self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
@@ -57,7 +58,8 @@ class SonoLumo(object):
         self.cmap = 'rainbow'
         self.colors = plt.get_cmap(self.cmap)
         self.detectedFreq = 0.0;
-    
+        self.detectedIntensity = 1000
+        
         # Attributes for RasPi Hat
         self.Ch_r1 = 0
         self.Ch_g1 = 1
@@ -78,7 +80,12 @@ class SonoLumo(object):
         self.ring2_color=self.colors(0)
         self.ring3_color=self.colors(0)
         self.ring4_color=self.colors(0)
-    
+        
+        self.ring1_numtics = self.num_tics
+        self.ring2_numtics = self.num_tics
+        self.ring3_numtics = self.num_tics
+        self.ring4_numtics = self.num_tics
+        
         # parameters for tuning rgb generalized bellshaped membership functions
         self.useGBMF = True
         self.blue_a=3.0
@@ -127,21 +134,21 @@ class SonoLumo(object):
         
     def setLEDcolors(self):
         if(self.is_raspi and not self.use_sim): #use real flower
-            self.pwm.setPWM(self.Ch_r1,0, (self.ring1_color[0]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_g1,0, (self.ring1_color[1]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_b1,0, (self.ring1_color[2]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_r1,0, (self.ring1_color[0]*self.ring1_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g1,0, (self.ring1_color[1]*self.ring1_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b1,0, (self.ring1_color[2]*self.ring1_numtics*self.num_tics).astype(int))
             
-            self.pwm.setPWM(self.Ch_r2,0, (self.ring2_color[0]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_g2,0, (self.ring2_color[1]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_b2,0, (self.ring2_color[2]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_r2,0, (self.ring2_color[0]*self.ring2_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g2,0, (self.ring2_color[1]*self.ring2_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b2,0, (self.ring2_color[2]*self.ring2_numtics*self.num_tics).astype(int))
             
-            self.pwm.setPWM(self.Ch_r3,0, (self.ring3_color[0]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_g3,0, (self.ring3_color[1]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_b3,0, (self.ring3_color[2]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_r3,0, (self.ring3_color[0]*self.ring3_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g3,0, (self.ring3_color[1]*self.ring3_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b3,0, (self.ring3_color[2]*self.ring3_numtics*self.num_tics).astype(int))
             
-            self.pwm.setPWM(self.Ch_r4,0, (self.ring4_color[0]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_g4,0, (self.ring4_color[1]*self.num_tics).astype(int))
-            self.pwm.setPWM(self.Ch_b4,0, (self.ring4_color[2]*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_r4,0, (self.ring4_color[0]*self.ring4_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_g4,0, (self.ring4_color[1]*self.ring4_numtics*self.num_tics).astype(int))
+            self.pwm.setPWM(self.Ch_b4,0, (self.ring4_color[2]*self.ring4_numtics*self.num_tics).astype(int))
             
         else: #use simulated flower (for testing and debugging)
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring4_sim, color=self.ring4_color))
@@ -188,7 +195,8 @@ class SonoLumo(object):
 
                 # Find Max Freq
                 self.detectedFreq = self.freqs[np.argmax(yf*self.freqmask)]
-                
+                self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
+                                            
                 if(self.detectedFreq>self.maxDetectFreq):
                     self.detectedFreq=self.maxDetectFreq
                 if(self.detectedFreq<self.minDetectFreq):
@@ -201,6 +209,7 @@ class SonoLumo(object):
                 
                 print("Colorval %0.2f" % colorval)
                 
+                numticsval = (self.detectedIntensity - self.minThreshold) / (2*(self.maxThreshold - self.minThreshold)) + 0.5
                 # Bound between 0 and 1
                 if(colorval>0.99):
                     colorval=0.99
@@ -217,7 +226,7 @@ class SonoLumo(object):
                     rgba = self.colors(colorval)
                 
                 # Set to white if power is below threashold
-                if(np.max(yf)<self.threshold):
+                if(np.max(yf*self.freqmask)<self.minThreshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
                     lst[1] = np.float64(0.99)
@@ -233,6 +242,12 @@ class SonoLumo(object):
                 self.ring2_color = self.ring1_color
                 self.ring1_color = rgba
                                 
+                # Set intensities for LED array
+                self.ring4_numtics = self.ring3_numtics		
+                self.ring3_numtics = self.ring2_numtics
+                self.ring2_numtics = self.ring1_numtics
+                self.ring1_numtics = numticsval
+                
                 print("%0.2f" % self.detectedFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf) + ", arraynum=%d" % np.argmax(yf*self.freqmask)) #show detected frequency for debugging
 
                 self.setLEDcolors() # update pwm color values for LED strips
