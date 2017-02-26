@@ -32,10 +32,14 @@ class SonoLumo(object):
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 8000.0
+        self.maxDetectFreq = 1000.0
         self.minDetectFreq = 300.0
         self.threshold = 200.0
 
+        # mel scale range
+        self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
+        self.melMIN =  2410.0*np.log10(1.0+(self.minDetectFreq/625.0))
+        
         # Open the device in nonblocking capture mode.
         self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
 
@@ -95,7 +99,6 @@ class SonoLumo(object):
         if(self.is_raspi):
             self.pwm = PWM(0x40)
             self.pwm.setPWMFreq(1000) # set to max frequency
-        
         
         
     def __del__(self):
@@ -186,21 +189,25 @@ class SonoLumo(object):
                 # Find Max Freq
                 self.detectedFreq = self.freqs[np.argmax(yf*self.freqmask)]
                 
-                ## Bound frequency by minimum detectable frequency
-                #if(self.detectedFreq<self.minDetectFreq):
-                #    self.detectedFreq = self.minDetectFreq
+                if(self.detectedFreq>self.maxDetectFreq):
+                    self.detectedFreq=self.maxDetectFreq
+                if(self.detectedFreq<self.minDetectFreq):
+                    self.detectedFreq=self.minDetectFreq
+                                    
+                # Convert frequency to mel scale
+                mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))
+                                            
+                colorval = (((mel-self.melMIN)*(0.99-0.01))/(self.melMAX-self.melMIN)) 
                 
-                # Convert frequency to 0-1 scale
-                #colorval = ((self.detectedFreq/self.maxDetectFreq) - (self.minDetectFreq/self.maxDetectFreq)) / (1- self.minDetectFreq/self.maxDetectFreq)
-                colorval = (self.detectedFreq - self.minDetectFreq) / self.maxDetectFreq
                 print("Colorval %0.2f" % colorval)
                 
-                # Bound frequency to maximum+minimum detectable frequency range
+                # Bound between 0 and 1
                 if(colorval>0.99):
                     colorval=0.99
-                if(colorval<0.0):
-                    colorval=0.0
+                if(colorval<0.01):
+                    colorval=0.01
                 
+                    
                 # Convert frequency to color
                 if(self.useGBMF):
                     # Convert Frequency to color using gerneralized bellshaped membership function
