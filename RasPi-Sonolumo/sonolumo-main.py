@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import sys, os
 import time
+from timeit import default_timer as timer
 import alsaaudio
 import struct
 import numpy as np
@@ -36,6 +37,8 @@ class SonoLumo(object):
         self.minDetectFreq = 300.0
         self.maxThreshold = 1000.0
         self.minThreshold = 200.0
+        self.starttime = 0.0
+        self.endtime = 0.0
 
         # mel scale range
         self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
@@ -181,6 +184,7 @@ class SonoLumo(object):
 
         # read from device
         while 1:
+            self.starttime = timer()
             print()
             l, data = self.inp.read()
             
@@ -215,8 +219,7 @@ class SonoLumo(object):
                     colorval=0.99
                 if(colorval<0.01):
                     colorval=0.01
-                
-                    
+
                 # Convert frequency to color
                 if(self.useGBMF):
                     # Convert Frequency to color using gerneralized bellshaped membership function
@@ -243,7 +246,7 @@ class SonoLumo(object):
                 self.ring1_color = rgba
                                 
                 # Set intensities for LED array
-                self.ring4_numtics = self.ring3_numtics		
+                self.ring4_numtics = self.ring3_numtics
                 self.ring3_numtics = self.ring2_numtics
                 self.ring2_numtics = self.ring1_numtics
                 self.ring1_numtics = numticsval
@@ -252,8 +255,11 @@ class SonoLumo(object):
 
                 self.setLEDcolors() # update pwm color values for LED strips
         
+                self.endtime = timer()
+                print("Processing took %0.3f s" % (self.endtime-self.starttime))
+
                 # short pause (use this to control timing for the color propogation...for now)
-                time.sleep(0.2)
+                #time.sleep(2.0)
 
 if __name__ == '__main__':
     # use_sim = False # True -> run simulator, False -> run Flower LED's
