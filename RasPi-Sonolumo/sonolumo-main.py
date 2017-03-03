@@ -53,10 +53,10 @@ class SonoLumo(object):
         self.inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
         self.inp.setperiodsize(self.chunk)
         
-        self.freqs = np.linspace(0.0,1.0/(2.0*(1.0/self.SamplingRate)),self.nfft/2.0)
+        self.freqs = np.linspace(0.0, self.SamplingRate/2.0, self.nfft/2.0)
         self.freqmask = (self.freqs>self.minDetectFreq) & (self.freqs<self.maxDetectFreq)
         print(self.freqmask)
-        self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
+        #self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
         self.windowF = np.hamming(self.nfft)
         self.cmap = 'rainbow'
         self.colors = plt.get_cmap(self.cmap)
