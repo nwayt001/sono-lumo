@@ -14,6 +14,8 @@ if (os.uname())[1] == 'raspberrypi':
 else:
     use_sim = True
 
+# Example:
+# arecord -D hw:1,0 -f S16_LE -r 44100 -t raw | python -u sonolumo-main.py
 
 # Main Class
 class SonoLumo(object):
@@ -28,6 +30,7 @@ class SonoLumo(object):
         # Attributes for USB mic & Signal Processing
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
+        self.inputformat = 'raw' # get input from stdin (e.g. arecord)
         self.USB_Name = 'hw:1,0' #change name to final USB mic
         self.SamplingRate = 44100
         self.Channels = 1
@@ -44,14 +47,15 @@ class SonoLumo(object):
         self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
         self.melMIN =  2410.0*np.log10(1.0+(self.minDetectFreq/625.0))
         
-        # Open the device in nonblocking capture mode.
-        self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
+        if(self.inputformat!='raw'):
+            # Open the device in nonblocking capture mode.
+            self.inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, self.USB_Name)
 
-        # Set attributes for recording:
-        self.inp.setchannels(self.Channels)
-        self.SamplingRate = self.inp.setrate(self.SamplingRate)
-        self.inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-        self.inp.setperiodsize(self.chunk)
+            # Set attributes for recording:
+            self.inp.setchannels(self.Channels)
+            self.SamplingRate = self.inp.setrate(self.SamplingRate)
+            self.inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
+            self.inp.setperiodsize(self.chunk)
         
         self.freqs = np.linspace(0.0, self.SamplingRate/2.0, self.nfft/2.0)
         self.freqmask = (self.freqs>self.minDetectFreq) & (self.freqs<self.maxDetectFreq)
@@ -186,7 +190,11 @@ class SonoLumo(object):
         while 1:
             self.starttime = timer()
             print()
-            l, data = self.inp.read()
+            if(self.inputformat=='raw'):
+                l=4000
+                data = sys.stdin.read(l)
+            else:
+                l, data = self.inp.read()
             
             if l>0:
                 fmt = "%dH"%(len(data)/2)
