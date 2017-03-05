@@ -20,7 +20,7 @@ else:
 # Main Class
 class SonoLumo(object):
     """
-    Main Sonnolumo Raspberry Pi Class:
+    Main Sonolumo Raspberry Pi Class:
     
     This class sets up an audio stream from a usb microphone, 
     calculates a frequency spectrum and encodes maximum frequency 
@@ -38,14 +38,22 @@ class SonoLumo(object):
         self.nfft = self.chunk
         self.maxDetectFreq = 2000.0
         self.minDetectFreq = 300.0
-        self.maxThreshold = 1000.0
+        self.maxThreshold = 2000.0
         self.minThreshold = 200.0
         self.starttime = 0.0
         self.endtime = 0.0
 
+        self.sineIndex = 0
+        self.radianArray = np.array([0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, 2*np.pi/3, 3*np.pi/4, 5*np.pi/6])
+        self.sineArray = np.sin(self.radianArray)
+
         # mel scale range
         self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
         self.melMIN =  2410.0*np.log10(1.0+(self.minDetectFreq/625.0))
+  
+        #intensity log scale range
+        self.maxLogThresh = 10*np.log10(self.maxThreshold)
+        self.minLogThresh = 10*np.log10(self.minThreshold)
         
         if(self.inputformat!='raw'):
             # Open the device in nonblocking capture mode.
@@ -163,7 +171,7 @@ class SonoLumo(object):
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring2_sim, color=self.ring2_color))
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring1_sim, color=self.ring1_color))
             self.ax.add_artist(plt.Circle((0.5, 0.5), self.ring0_sim, color='black'))
-            plt.pause(0.1)
+    #        plt.pause(0.01)
     
     def getROYGBIV(self,x):
         # convert 0-1 value to 0-12 (because the GBMF constants are based on that scale)
@@ -215,18 +223,25 @@ class SonoLumo(object):
                     self.detectedFreq=self.minDetectFreq
                                     
                 # Convert frequency to mel scale
-                mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))
-                                            
+                mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))                            
                 colorval = (((mel-self.melMIN)*(0.99-0.01))/(self.melMAX-self.melMIN)) 
                 
                 print("Colorval %0.2f" % colorval)
-                
-                numticsval = (self.detectedIntensity - self.minThreshold) / (2*(self.maxThreshold - self.minThreshold)) + 0.5
+
+                # Convert intensity to log scale
+                intensityDB = 10*np.log10(self.detectedIntensity)
+                numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
+
                 # Bound between 0 and 1
+                
                 if(colorval>0.99):
                     colorval=0.99
                 if(colorval<0.01):
                     colorval=0.01
+                if(numticsval > 1.0):
+                    numticsval = 1.0
+                if(numticsval < 0.5):
+                    numticsval = 0.5
 
                 # Convert frequency to color
                 if(self.useGBMF):
@@ -236,7 +251,8 @@ class SonoLumo(object):
                     # Convert Frequency to Color using pyplot colormaps
                     rgba = self.colors(colorval)
                 
-                # Set to white if power is below threashold
+                # Set to white if power is below threshold
+                # Also pulsate the white while we wait for power to exceed threshold
                 if(np.max(yf*self.freqmask)<self.minThreshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
@@ -244,6 +260,11 @@ class SonoLumo(object):
                     lst[2] = np.float64(0.99)
                     lst[3] = np.float64(1.0)
                     rgba = tuple(lst)
+                    numticsval = self.sineArray[self.sineIndex]/2 + 0.5
+                    if(self.sineIndex < 7):
+                        self.sineIndex = self.sineIndex + 1
+                    else:
+                        self.sineIndex = 0                      
                 else:
                     print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
                 
@@ -258,7 +279,9 @@ class SonoLumo(object):
                 self.ring3_numtics = self.ring2_numtics
                 self.ring2_numtics = self.ring1_numtics
                 self.ring1_numtics = numticsval
-                
+
+                print("Numticsval %0.2f" % numticsval)
+
                 print("%0.2f" % self.detectedFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf) + ", arraynum=%d" % np.argmax(yf*self.freqmask)) #show detected frequency for debugging
 
                 self.setLEDcolors() # update pwm color values for LED strips
