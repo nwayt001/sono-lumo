@@ -42,11 +42,15 @@ class SonoLumo(object):
         self.minThreshold = 200.0
         self.starttime = 0.0
         self.endtime = 0.0
-
+        self.debug = True
+        
         self.sineIndex = 0
         self.radianArray = np.array([0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, 2*np.pi/3, 3*np.pi/4, 5*np.pi/6])
         self.sineArray = np.sin(self.radianArray)
-
+        
+        # Scaling Type
+        self.scaleType = 'mel'  # 'mel' or 'linear'
+        
         # mel scale range
         self.melMAX =  2410.0*np.log10(1.0+(self.maxDetectFreq/625.0))
         self.melMIN =  2410.0*np.log10(1.0+(self.minDetectFreq/625.0))
@@ -195,9 +199,12 @@ class SonoLumo(object):
         print(self.freqs)
 
         # read from device
+        yf_prev = 0.0
+        alpha = 0.25 #moving average
         while 1:
-            self.starttime = timer()
-            print()
+            if self.debug:
+                self.starttime = timer()
+                print()
             if(self.inputformat=='raw'):
                 l=4000
                 data = sys.stdin.read(l)
@@ -212,7 +219,11 @@ class SonoLumo(object):
                 # Apply FFT
                 yf = np.fft.rfft(data2)
                 yf = 2.0/self.nfft * np.abs(yf[:self.nfft//2])
-
+                
+                # moving average
+                yf = ((1.0-alpha) * yf_prev) +  (alpha * yf)
+                yf_prev = yf
+                
                 # Find Max Freq
                 self.detectedFreq = self.freqs[np.argmax(yf*self.freqmask)]
                 self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
@@ -223,21 +234,27 @@ class SonoLumo(object):
                     self.detectedFreq=self.minDetectFreq
                                     
                 # Convert frequency to mel scale
-                mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))                            
-                colorval = (((mel-self.melMIN)*(0.99-0.01))/(self.melMAX-self.melMIN)) 
+                if(self.scaleType == 'mel'):
+                    mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))                            
+                    colorval = (((mel-self.melMIN)*(1.0-0.0))/(self.melMAX-self.melMIN)) 
+                    
+                elif(self.scaleType =='linear'):
+                    colorval = (((self.detectedFreq - self.minDetectFreq) * (1.0-0.0)) / (self.maxDetectFreq - self.minDetectFreq))
                 
-                print("Colorval %0.2f" % colorval)
+                if self.debug:
+                    print("Colorval %0.2f" % colorval)
 
                 # Convert intensity to log scale
                 intensityDB = 10*np.log10(self.detectedIntensity)
                 numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
 
-                # Bound between 0 and 1
-                
+                # Bound between 0.001 and 0.99 - this was found to work better than 0-1
                 if(colorval>0.99):
                     colorval=0.99
-                if(colorval<0.01):
-                    colorval=0.01
+                if(colorval<0.001):
+                    colorval=0.001
+                    
+                # Bound between 0.5 and 1    
                 if(numticsval > 1.0):
                     numticsval = 1.0
                 if(numticsval < 0.5):
@@ -266,7 +283,8 @@ class SonoLumo(object):
                     else:
                         self.sineIndex = 0                      
                 else:
-                    print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
+                    if self.debug:
+                        print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
                 
                 # Set colors for LED array
                 self.ring4_color = self.ring3_color
@@ -280,14 +298,13 @@ class SonoLumo(object):
                 self.ring2_numtics = self.ring1_numtics
                 self.ring1_numtics = numticsval
 
-                print("Numticsval %0.2f" % numticsval)
-
-                print("%0.2f" % self.detectedFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf) + ", arraynum=%d" % np.argmax(yf*self.freqmask)) #show detected frequency for debugging
-
                 self.setLEDcolors() # update pwm color values for LED strips
-        
-                self.endtime = timer()
-                print("Processing took %0.3f s" % (self.endtime-self.starttime))
+                
+                if self.debug:
+                    print("Numticsval %0.2f" % numticsval)
+                    print("%0.2f" % self.detectedFreq + ' Hz' + ", freqbinpower=%0.2f" % np.max(yf) + ", totalpower=%0.2f" % np.sum(yf) + ", arraynum=%d" % np.argmax(yf*self.freqmask)) #show detected frequency for debugging        
+                    self.endtime = timer()
+                    print("Processing took %0.3f s" % (self.endtime-self.starttime))
 
                 # short pause (use this to control timing for the color propogation...for now)
                 #time.sleep(2.0)
