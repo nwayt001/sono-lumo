@@ -8,6 +8,8 @@ import struct
 import numpy as np
 import numpy as numpy
 import matplotlib.pyplot as plt
+import scipy
+from scipy.signal import hilbert
 if (os.uname())[1] == 'raspberrypi':
     from Adafruit_PWM_Servo_Driver import PWM
     use_sim = False
@@ -251,11 +253,19 @@ class SonoLumo(object):
                     colorval=0.001
                     
                 # light amplitude modulation based on sound amplitude
-                #self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
-                # Convert intensity to log scale
-                #intensityDB = 10*np.log10(self.detectedIntensity)
-                #numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
-                numticsval=1.0                
+                if self.amplitudeType == 'frequency':
+                    self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
+                    # Convert intensity to log scale
+                    intensityDB = 10*np.log10(self.detectedIntensity)
+                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
+                elif self.amplitudeType == 'envelope':
+                    analytic_signal = hilbert(data2)
+                    amplitude_envelope = np.abs(analytic_signal)
+                    # max signal amplitude
+                    self.detectedIntensity = max(amplitude_envelope)
+                    # Convert intensity to log scale
+                    intensityDB = 10*np.log10(self.detectedIntensity)
+                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
     
                 # Bound between 0.5 and 1    
                 if(numticsval > 1.0):
