@@ -30,7 +30,7 @@ class SonoLumo(object):
         # Attributes for USB mic & Signal Processing
         self.use_sim = use_sim
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
-        self.inputformat = 'raw' # get input from stdin (e.g. arecord)
+        self.inputformat = 'non-raw' # get input from stdin (e.g. arecord)
         self.USB_Name = 'hw:1,0' #change name to final USB mic
         self.SamplingRate = 44100
         self.Channels = 1
@@ -124,7 +124,8 @@ class SonoLumo(object):
         # Initialize the RasPi Hat (for Raspi only)
         if(self.is_raspi):
             self.pwm = PWM(0x40)
-            self.pwm.setPWMFreq(1000) # set to max frequency
+            self.pwm.setPWMFreq(500) # set to half of max frequency
+            # may need to lower the frequency to get lower amplitude levels
         
         
     def __del__(self):
@@ -226,7 +227,6 @@ class SonoLumo(object):
                 
                 # Find Max Freq
                 self.detectedFreq = self.freqs[np.argmax(yf*self.freqmask)]
-                self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
                                             
                 if(self.detectedFreq>self.maxDetectFreq):
                     self.detectedFreq=self.maxDetectFreq
@@ -237,23 +237,26 @@ class SonoLumo(object):
                 if(self.scaleType == 'mel'):
                     mel = 2410.0*np.log10(1.0+(self.detectedFreq/625.0))                            
                     colorval = (((mel-self.melMIN)*(1.0-0.0))/(self.melMAX-self.melMIN)) 
-                    
+                # or Convert frequency to linear scale                    
                 elif(self.scaleType =='linear'):
                     colorval = (((self.detectedFreq - self.minDetectFreq) * (1.0-0.0)) / (self.maxDetectFreq - self.minDetectFreq))
                 
                 if self.debug:
                     print("Colorval %0.2f" % colorval)
-
-                # Convert intensity to log scale
-                intensityDB = 10*np.log10(self.detectedIntensity)
-                numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
-
+                
                 # Bound between 0.001 and 0.99 - this was found to work better than 0-1
                 if(colorval>0.99):
                     colorval=0.99
                 if(colorval<0.001):
                     colorval=0.001
                     
+                # light amplitude modulation based on sound amplitude
+                #self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
+                # Convert intensity to log scale
+                #intensityDB = 10*np.log10(self.detectedIntensity)
+                #numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
+                numticsval=1.0                
+    
                 # Bound between 0.5 and 1    
                 if(numticsval > 1.0):
                     numticsval = 1.0
@@ -269,24 +272,18 @@ class SonoLumo(object):
                     rgba = self.colors(colorval)
                 
                 # Set to white if power is below threshold
-                # Also pulsate the white while we wait for power to exceed threshold
                 if(np.max(yf*self.freqmask)<self.minThreshold):
                     lst = list(rgba)
                     lst[0] = np.float64(0.99)
                     lst[1] = np.float64(0.99)
                     lst[2] = np.float64(0.99)
                     lst[3] = np.float64(1.0)
-                    rgba = tuple(lst)
-                    numticsval = self.sineArray[self.sineIndex]/2 + 0.5
-                    if(self.sineIndex < 7):
-                        self.sineIndex = self.sineIndex + 1
-                    else:
-                        self.sineIndex = 0                      
+                    rgba = tuple(lst)                    
                 else:
                     if self.debug:
                         print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
                 
-                # Set colors for LED array
+                # Set/propogate colors for LED array
                 self.ring4_color = self.ring3_color
                 self.ring3_color = self.ring2_color
                 self.ring2_color = self.ring1_color
@@ -307,7 +304,7 @@ class SonoLumo(object):
                     print("Processing took %0.3f s" % (self.endtime-self.starttime))
 
                 # short pause (use this to control timing for the color propogation...for now)
-                #time.sleep(2.0)
+                time.sleep(2.0)
 
 if __name__ == '__main__':
     # use_sim = False # True -> run simulator, False -> run Flower LED's
