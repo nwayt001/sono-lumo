@@ -44,7 +44,7 @@ class SonoLumo(object):
         self.minThreshold = 200.0
         self.starttime = 0.0
         self.endtime = 0.0
-        self.debug = True
+        self.debug = False
         
         self.sineIndex = 0
         self.radianArray = np.array([0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, 2*np.pi/3, 3*np.pi/4, 5*np.pi/6])
@@ -132,6 +132,7 @@ class SonoLumo(object):
         
     def __del__(self):
         try:
+            print('closing...')
             self.inp.close()
         except ValueError:
             print('error when closing audio stream')
@@ -314,7 +315,7 @@ class SonoLumo(object):
                     print("Processing took %0.3f s" % (self.endtime-self.starttime))
 
                 # short pause (use this to control timing for the color propogation...for now)
-                time.sleep(2.0)
+                time.sleep(0.2)
 
 if __name__ == '__main__':
     # use_sim = False # True -> run simulator, False -> run Flower LED's
