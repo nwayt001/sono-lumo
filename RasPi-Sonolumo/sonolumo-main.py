@@ -8,8 +8,8 @@ import struct
 import numpy as np
 import numpy as numpy
 import matplotlib.pyplot as plt
-import scipy
-from scipy.signal import hilbert
+#import scipy
+#from scipy.signal import hilbert
 if (os.uname())[1] == 'raspberrypi':
     from Adafruit_PWM_Servo_Driver import PWM
     use_sim = False
@@ -34,18 +34,18 @@ class SonoLumo(object):
         self.is_raspi = (os.uname())[1] == 'raspberrypi'
         self.inputformat = 'non-raw' # get input from stdin (e.g. arecord)
         self.USB_Name = 'hw:1,0' #change name to final USB mic
-        self.SamplingRate = 44100
+        self.SamplingRate = 16000
         self.Channels = 1
         self.chunk = 2000
         self.nfft = self.chunk
-        self.maxDetectFreq = 2000.0
+        self.maxDetectFreq = 1200.0
         self.minDetectFreq = 300.0
-        self.maxThreshold = 2000.0
+        self.maxThreshold = 1000.0
         self.minThreshold = 200.0
         self.starttime = 0.0
         self.endtime = 0.0
         self.debug = False
-        
+        self.amplitudeType = 'frequency'
         self.sineIndex = 0
         self.radianArray = np.array([0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, 2*np.pi/3, 3*np.pi/4, 5*np.pi/6])
         self.sineArray = np.sin(self.radianArray)
@@ -73,7 +73,8 @@ class SonoLumo(object):
         
         self.freqs = np.linspace(0.0, self.SamplingRate/2.0, self.nfft/2.0)
         self.freqmask = (self.freqs>self.minDetectFreq) & (self.freqs<self.maxDetectFreq)
-        print(self.freqmask)
+        if self.debug:
+            print(self.freqmask)
         #self.time_resol = (self.nfft*(1.0) / self.SamplingRate*(1.0)) *1000.0
         self.windowF = np.hamming(self.nfft)
         self.cmap = 'rainbow'
@@ -118,6 +119,8 @@ class SonoLumo(object):
         self.red_a=3.0
         self.red_b=-3.0
         self.red_c=7.0
+        
+        print(self.SamplingRate)
         
         # If we're not using raspi, or we want to run simulator
         if(not self.is_raspi or self.use_sim):
@@ -199,8 +202,8 @@ class SonoLumo(object):
         
         
     def run(self):
-
-        print(self.freqs)
+        if self.debug:
+            print(self.freqs)
 
         # read from device
         yf_prev = 0.0
@@ -258,7 +261,7 @@ class SonoLumo(object):
                     self.detectedIntensity = yf[np.argmax(yf*self.freqmask)]
                     # Convert intensity to log scale
                     intensityDB = 10*np.log10(self.detectedIntensity)
-                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
+                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.3
                 elif self.amplitudeType == 'envelope':
                     analytic_signal = hilbert(data2)
                     amplitude_envelope = np.abs(analytic_signal)
@@ -266,13 +269,13 @@ class SonoLumo(object):
                     self.detectedIntensity = max(amplitude_envelope)
                     # Convert intensity to log scale
                     intensityDB = 10*np.log10(self.detectedIntensity)
-                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.5
+                    numticsval = (intensityDB - self.minLogThresh) / (2*(self.maxLogThresh - self.minLogThresh)) + 0.3
     
                 # Bound between 0.5 and 1    
                 if(numticsval > 1.0):
                     numticsval = 1.0
-                if(numticsval < 0.5):
-                    numticsval = 0.5
+                if(numticsval < 0.3):
+                    numticsval = 0.3
 
                 # Convert frequency to color
                 if(self.useGBMF):
@@ -289,7 +292,8 @@ class SonoLumo(object):
                     lst[1] = np.float64(0.99)
                     lst[2] = np.float64(0.99)
                     lst[3] = np.float64(1.0)
-                    rgba = tuple(lst)                    
+                    rgba = tuple(lst)       
+                    numticsval = 0.5
                 else:
                     if self.debug:
                         print(np.array_str(yf[1:np.argmax(yf*self.freqmask)], precision=2, suppress_small=True))
@@ -315,7 +319,7 @@ class SonoLumo(object):
                     print("Processing took %0.3f s" % (self.endtime-self.starttime))
 
                 # short pause (use this to control timing for the color propogation...for now)
-                time.sleep(0.2)
+                time.sleep(0.1)
 
 if __name__ == '__main__':
     # use_sim = False # True -> run simulator, False -> run Flower LED's
